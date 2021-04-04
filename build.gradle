@@ -1,0 +1,47 @@
+apply plugin: 'java'
+
+repositories {
+    mavenCentral()
+    maven {
+        url 'https://repo.implario.dev/public/'
+    }
+    maven {
+        url 'https://repo.implario.dev/cristalix/'
+        credentials {
+            username = System.getenv("IMPLARIO_REPO_USER")
+            password = System.getenv("IMPLARIO_REPO_PASSWORD")
+        }
+    }
+}
+
+sourceCompatibility = '1.8'
+targetCompatibility = '1.8'
+
+tasks.withType(JavaCompile) {
+    options.encoding = "UTF-8"
+    sourceCompatibility = "1.8"
+    targetCompatibility = "1.8"
+}
+
+dependencies {
+    compileOnly group: 'org.codehaus.groovy', name: 'groovy', version: '3.0.7'
+
+    compileOnly 'org.projectlombok:lombok:1.18.16'
+    annotationProcessor 'org.projectlombok:lombok:1.18.16'
+    compileOnly 'cristalix:bukkit-core:21.01.30'
+    compileOnly 'cristalix:dark-paper:21.01.12'
+    compileOnly 'bottle:bottle-libs:1.0'
+
+    implementation 'clepto:clepto-bukkit:3.4.2'
+    implementation 'clepto:clepto-cristalix:3.0.2'
+    implementation 'ru.cristalix:stat-service-bukkit-api:21.02.28.1821'
+
+}
+
+jar {
+    from sourceSets.main.resources
+    from {
+        duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+        configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
+    }
+}

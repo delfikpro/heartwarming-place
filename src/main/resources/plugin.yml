@@ -1,0 +1,7 @@
+name: HeartwarmingPlace
+version: 1.0
+main: heartwarming.HeartwarmingPlugin
+depend: [CoreAPI]
+commands:
+  mod: {}
+  bs: {}
