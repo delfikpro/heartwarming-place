@@ -90,7 +90,9 @@ public class GameOf2048 extends Game {
 			shift(direction);
 			lock = true;
 			B.postpone(6, () -> {
-				addRandom();
+				if (!addRandom()) {
+
+				}
 				lock = false;
 			});
 
