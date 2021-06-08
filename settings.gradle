@@ -1,2 +1,3 @@
 rootProject.name = 'heartwarming-place'
 
+include 'a', 'b'

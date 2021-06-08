@@ -16,6 +16,9 @@ repositories {
             password = System.getenv("IMPLARIO_REPO_PASSWORD")
         }
     }
+    maven {
+        url 'https://hub.spigotmc.org/nexus/content/repositories/snapshots'
+    }
 }
 
 sourceCompatibility = '1.8'
@@ -35,6 +38,10 @@ dependencies {
     compileOnly 'cristalix:bukkit-core:21.3.16'
     compileOnly 'cristalix:dark-paper:21.02.03'
 
+    implementation 'org.reflections:reflections:0.9.12'
+    implementation 'dev.implario.bukkit:bukkit-tools:4.0.0'
+    implementation 'dev.implario.bukkit:kotlin-api:1.0.0'
+    implementation 'dev.implario.bukkit:dark-paper:1.0.0'
     implementation 'implario:java-tools:1.1.3'
     implementation 'implario:humanize:1.1.3'
     implementation 'clepto:clepto-bukkit:3.4.2'

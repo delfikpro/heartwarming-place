@@ -1,18 +1,23 @@
 package heartwarming.mod;
 
 import clepto.bukkit.B;
+import clepto.bukkit.event.EventContext;
 import dev.xdark.feder.NetUtil;
 import heartwarming.HeartwarmingPlugin;
 import heartwarming.User;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import lombok.SneakyThrows;
+import lombok.val;
+import net.minecraft.server.v1_12_R1.ItemStack;
 import net.minecraft.server.v1_12_R1.PacketDataSerializer;
 import net.minecraft.server.v1_12_R1.PacketPlayOutCustomPayload;
 import org.apache.commons.io.IOUtils;
 import org.bukkit.Bukkit;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.craftbukkit.v1_12_R1.entity.CraftPlayer;
+import org.bukkit.event.EventPriority;
+import org.bukkit.event.player.PlayerQuitEvent;
 import ru.cristalix.core.display.DisplayChannels;
 
 import java.io.*;
@@ -194,6 +199,13 @@ public class ModManager {
         });
         modCommand.setTabCompleter((sender, cmd, label, args) -> {
             return modMap.keySet().stream().filter(s -> s.startsWith(args[0].toLowerCase(Locale.ROOT))).collect(Collectors.toList());
+        });
+
+        new EventContext(anything -> true).on(PlayerQuitEvent.class, EventPriority.LOW, e -> {
+            User user = HeartwarmingPlugin.userManager.getUser(e.getPlayer());
+            for (Mod mod : modMap.values()) {
+                mod.getUsedBy().remove(user);
+            }
         });
 
     }

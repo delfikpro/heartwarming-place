@@ -5,16 +5,22 @@ import clepto.bukkit.event.EventContext;
 import clepto.bukkit.world.Label;
 import clepto.cristalix.WorldMeta;
 import heartwarming.HeartwarmingPlugin;
+import lombok.Data;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Llama;
+import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerRespawnEvent;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
+import org.spigotmc.event.entity.EntityMountEvent;
 import ru.cristalix.npcs.server.Npc;
 import ru.cristalix.npcs.server.Npcs;
+
+import java.util.ArrayList;
+import java.util.Comparator;
 
 /**
  * Это был невероятно красивый эпилог.
@@ -67,6 +73,23 @@ public class SoulSong {
         eventContext.on(PlayerRespawnEvent.class, e -> {
             e.getPlayer().addPotionEffect(new PotionEffect(PotionEffectType.NIGHT_VISION, 100000000, 1, true, false));
         });
+
+        eventContext.on(EntityMountEvent.class, e -> {
+            if (e.getMount().getType() == EntityType.LLAMA) e.setCancelled(true);
+        });
+
+        eventContext.on(BlockPlaceEvent.class, e -> {
+            if (e.getBlockPlaced().getLocation().distanceSquared(alestaLoc) < 36) e.setCancelled(true);
+        });
+
+        @Data
+        class A {
+            long time;
+            boolean out_flag;
+        }
+
+        new ArrayList<A>().sort(Comparator.comparingLong(A::getTime).thenComparing(A::isOut_flag));
+
 
 
     }

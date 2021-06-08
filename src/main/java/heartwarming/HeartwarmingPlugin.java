@@ -1,20 +1,22 @@
 package heartwarming;
 
 import clepto.bukkit.B;
-import clepto.bukkit.item.ItemBuilder;
 import clepto.bukkit.routine.BukkitDoer;
 import clepto.bukkit.routine.Doer;
 import clepto.bukkit.world.Label;
 import clepto.cristalix.Cristalix;
 import clepto.cristalix.WorldMeta;
 import com.destroystokyo.paper.event.player.PlayerInitialSpawnEvent;
+import dev.implario.bukkit.item.ItemBuilder;
 import heartwarming.game.Slot;
 import heartwarming.game.gameof2048.Direction;
 import heartwarming.mod.ModManager;
+import heartwarming.script.ScriptManager;
 import heartwarming.soulsong.SoulSong;
 import implario.humanize.TimeFormatter;
 import lombok.Getter;
 import lombok.SneakyThrows;
+import net.md_5.bungee.api.chat.TextComponent;
 import net.minecraft.server.v1_12_R1.BlockPosition;
 import net.minecraft.server.v1_12_R1.Items;
 import net.minecraft.server.v1_12_R1.NBTBase;
@@ -29,7 +31,9 @@ import org.bukkit.entity.ArmorStand;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
+import org.bukkit.event.Event;
 import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.*;
 import org.bukkit.event.entity.*;
@@ -45,11 +49,16 @@ import org.spigotmc.event.player.PlayerSpawnLocationEvent;
 import ru.cristalix.boards.bukkitapi.Board;
 import ru.cristalix.boards.bukkitapi.Boards;
 import ru.cristalix.core.CoreApi;
+import ru.cristalix.core.account.IAccountService;
 import ru.cristalix.core.build.models.Point;
+import ru.cristalix.core.chat.ChatTextComponent;
+import ru.cristalix.core.chat.IChatView;
+import ru.cristalix.core.event.PermissionsLoadEvent;
 import ru.cristalix.core.map.*;
 import ru.cristalix.core.permissions.IGroup;
 import ru.cristalix.core.permissions.IPermissionContext;
 import ru.cristalix.core.permissions.IPermissionService;
+import ru.cristalix.core.permissions.StaffGroups;
 import ru.cristalix.core.realm.IRealmService;
 import ru.cristalix.core.realm.RealmId;
 import ru.cristalix.core.realm.RealmInfo;
@@ -59,12 +68,15 @@ import ru.cristalix.core.stats.PlayerScope;
 import ru.cristalix.core.stats.UserManager;
 import ru.cristalix.core.stats.impl.StatService;
 import ru.cristalix.core.stats.impl.network.StatServiceConnectionData;
+import ru.cristalix.core.text.TextFormat;
 import ru.cristalix.core.util.UtilV3;
 
 import java.time.Duration;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 
 import static implario.humanize.TimeFormatter.Interval.TICK;
+import static java.lang.Enum.valueOf;
 
 public class HeartwarmingPlugin extends JavaPlugin implements Listener {
 
@@ -78,6 +90,7 @@ public class HeartwarmingPlugin extends JavaPlugin implements Listener {
     public static WorldMeta worldMeta;
 
     private final Map<Location, Slot> slots = new HashMap<>();
+    private Label arena;
 
     @SneakyThrows
     @Override
@@ -85,7 +98,12 @@ public class HeartwarmingPlugin extends JavaPlugin implements Listener {
 
         B.plugin = instance = this;
 
+        ScriptManager.init();
         RealmInfo info = IRealmService.get().getCurrentRealmInfo();
+//        info.setInitialPayload(new byte[] {62, 45, 10});
+//        System.out.println(new String(info.getInitialPayload()));
+//        info.setTrustMyHost(true);
+
         info.setStatus(RealmStatus.GAME_STARTED_CAN_SPACTATE);
         info.setReadableName("Уютное местечко");
         info.setGroupName("Уютное местечко");
@@ -107,8 +125,6 @@ public class HeartwarmingPlugin extends JavaPlugin implements Listener {
         );
 
         TimeFormatter formatter = TimeFormatter.builder().accuracy(0).excludeIntervals(TICK).build();
-
-
 
 
         B.regCommand((sender, args) -> {
@@ -159,7 +175,7 @@ public class HeartwarmingPlugin extends JavaPlugin implements Listener {
         Doer doer = new BukkitDoer(this);
 
         doer.every(10).seconds(() -> {
-            statService.getLeaderboard(statScope, "online", 50).thenAccept(r -> {
+            statService.getLeaderboard(statScope, "online", 10).thenAccept(r -> {
                 onlineTop.clearContent();
                 int i = 1;
                 for (Stats stats : r) {
@@ -226,6 +242,18 @@ public class HeartwarmingPlugin extends JavaPlugin implements Listener {
         //			}
         //		});
 
+        List<String> sharks = Arrays.asList(
+                "a6ab9f04-acb7-11eb-acca-1cb72caa35fd",
+                "e7c13d3d-ac38-11e8-8374-1cb72caa35fd"
+        );
+
+        B.regCommand((sender, args) -> {
+            if (!sharks.contains(sender.getUniqueId().toString()))
+                return "§cЭта команда доступна только группе §9Пушистые акулы§c.";
+            String realm = args[0];
+            Cristalix.transfer(Collections.singleton(sender.getUniqueId()), RealmId.of(realm));
+            return "§aВы были перемещены на реалм §f" + realm;
+        }, "jump");
 
         Bukkit.getPluginCommand("bs").setExecutor((sender, command, s, args) -> {
             if (sender.isOp())
@@ -235,6 +263,46 @@ public class HeartwarmingPlugin extends JavaPlugin implements Listener {
 
 
         new ModManager().init();
+
+        B.regCommand((sender, args) -> {
+            sender.setResourcePack(args[0], UUID.randomUUID().toString().substring(0, 16));
+            return "Resourcepack changed";
+        }, "rp");
+
+        arena = worldMeta.requireLabel("arena");
+
+        ArmorStand arenaStand = worldMeta.getWorld().spawn(arena.toCenterLocation(), ArmorStand.class);
+        arenaStand.setVisible(false);
+        arenaStand.setBasePlate(false);
+        arenaStand.setCustomName("§dPvP-арена");
+        arenaStand.setGravity(false);
+        arenaStand.setMarker(true);
+        arenaStand.setInvulnerable(true);
+        arenaStand.setCustomNameVisible(true);
+
+        B.repeat(1, () -> {
+            for (Player p : Bukkit.getOnlinePlayers()) {
+                User user = userManager.getUser(p);
+                if (p.getLocation().distanceSquared(arena) < 81) {
+                    if (!user.isPvp()) {
+                        p.setAllowFlight(false);
+                        user.setCombo(0);
+                        user.setPvp(true);
+                    }
+                } else {
+                    if (user.isPvp()) {
+                        p.setAllowFlight(true);
+                        p.setFlying(true);
+                        user.setCombo(0);
+                        user.setPvp(false);
+                    }
+                }
+            }
+        });
+
+        B.regCommand((sender, args) -> {
+            return sender.getLocation().toString();
+        }, "info");
 
         Bukkit.getPluginManager().registerEvents(this, this);
 
@@ -249,6 +317,12 @@ public class HeartwarmingPlugin extends JavaPlugin implements Listener {
         //			return true;
         //		});
 
+    }
+
+    @EventHandler
+    public void handle(PlayerDeathEvent e) {
+        e.setKeepInventory(true);
+        e.setDeathMessage("");
     }
 
     @EventHandler
@@ -284,6 +358,21 @@ public class HeartwarmingPlugin extends JavaPlugin implements Listener {
     @EventHandler
     public void handle(PlayerDropItemEvent e) {
         if (e.getPlayer().getGameMode() != GameMode.CREATIVE) e.setCancelled(true);
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onDamage(EntityDamageByEntityEvent e) {
+        if (e.getEntityType() == EntityType.PLAYER && e.getDamager().getType() == EntityType.PLAYER) {
+            User user = userManager.getUser(e.getDamager().getUniqueId());
+            long time = System.currentTimeMillis();
+            if (user.getLastHitTime() + 1000 < time) {
+                user.setCombo(0);
+            }
+            user.setLastHitTime(time);
+            user.setCombo(user.getCombo() + 1);
+            if (user.getCombo() >= 3)
+                user.getPlayer().sendActionBar("Комбо: §ex" + user.getCombo());
+        }
     }
 
     //	@EventHandler
@@ -364,7 +453,10 @@ public class HeartwarmingPlugin extends JavaPlugin implements Listener {
     @EventHandler
     public void handle(BlockPlaceEvent e) {
         if (e.getPlayer().getGameMode() != GameMode.CREATIVE) {
-            if (e.getBlockPlaced().getType() != Material.SANDSTONE || e.getBlockPlaced().getLocation().distanceSquared(spawn) < 25)
+            Location location = e.getBlockPlaced().getLocation();
+            if (e.getBlockPlaced().getType() != Material.SANDSTONE ||
+                    location.distanceSquared(spawn) < 25 ||
+                    location.distanceSquared(arena) < 81)
                 e.setCancelled(true);
             else {
                 e.getPlayer().getInventory().setItem(1, new ItemStack(Material.SANDSTONE, 64, (short) 2));
@@ -401,7 +493,8 @@ public class HeartwarmingPlugin extends JavaPlugin implements Listener {
     //	@EventHandler
     //	public void handle(EntityDamageByEntityEvent e) {
     //	    if (e.getDamager() instanceof Player && e.getEntity() instanceof Player) {
-    //	    	if (((Player) e.getDamager()).getGameMode() == GameMode.CREATIVE &&
+    //	    	if (((Player) e.getDamager()).getGameMode()
+    //	    	== GameMode.CREATIVE &&
     //			((Player) e.getEntity()).getGameMode() != GameMode.CREATIVE) {
     //	    		e.setCancelled(true);
     //	    		e.getDamager().sendMessage("§сНе бей его, ты же в креативе...");
@@ -411,7 +504,12 @@ public class HeartwarmingPlugin extends JavaPlugin implements Listener {
 
     @EventHandler
     public void handle(EntityDamageEvent e) {
-        if (e.getEntityType() == EntityType.PLAYER) e.setCancelled(true);
+        if (e.getEntityType() != EntityType.PLAYER)
+            return;
+        if (e.getCause() == EntityDamageEvent.DamageCause.ENTITY_ATTACK &&
+                userManager.getUser(((Player) e.getEntity())).isPvp())
+            return;
+        e.setCancelled(true);
     }
 
     @EventHandler
@@ -476,10 +574,15 @@ public class HeartwarmingPlugin extends JavaPlugin implements Listener {
         inventory.setItem(0, new ItemStack(Material.ENDER_PEARL, 16));
         inventory.setItem(1, new ItemStack(Material.SANDSTONE, 64, (short) 2));
 
-        inventory.setItem(3, new ItemBuilder().item(Material.CLAY_BALL).nbt("other", "arrow_down").build().asBukkitMirror());
-        inventory.setItem(4, new ItemBuilder().item(Material.CLAY_BALL).nbt("other", "arrow_left").build().asBukkitMirror());
-        inventory.setItem(5, new ItemBuilder().item(Material.CLAY_BALL).nbt("other", "arrow_right").build().asBukkitMirror());
-        inventory.setItem(6, new ItemBuilder().item(Material.CLAY_BALL).nbt("other", "reload").build().asBukkitMirror());
+        player.sendMessage("§eДобро пожаловать на Уютное местечко.");
+        player.sendMessage("§eЭто технический сервер, на котором разработчики тестируют разную магию.");
+        player.sendMessage("§eКарта, которую пострили игроки: https://implario.dev/hw.schematic");
+
+
+//        inventory.setItem(3, new ItemBuilder().item(Material.CLAY_BALL).nbt("other", "arrow_down").build().asBukkitMirror());
+//        inventory.setItem(4, new ItemBuilder().item(Material.CLAY_BALL).nbt("other", "arrow_left").build().asBukkitMirror());
+//        inventory.setItem(5, new ItemBuilder().item(Material.CLAY_BALL).nbt("other", "arrow_right").build().asBukkitMirror());
+//        inventory.setItem(6, new ItemBuilder().item(Material.CLAY_BALL).nbt("other", "reload").build().asBukkitMirror());
         //		e.getPlayer().sendMessage("§fУютный совет: §eУ вас есть доступ к команде §f/gamemode§e.");
     }
 

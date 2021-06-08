@@ -27,6 +27,15 @@ public class User extends PlayerWrapper {
 
 	private final long joinOnline;
 
+	@Setter
+	private int combo;
+
+	@Setter
+	private long lastHitTime;
+
+	@Setter
+	private boolean pvp;
+
 	private final long joinTime = System.currentTimeMillis();
 
 	private final Cache<String, Mod> waitingReloadConfirm = CacheBuilder.newBuilder()
