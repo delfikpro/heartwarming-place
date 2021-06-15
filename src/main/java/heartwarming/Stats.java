@@ -9,8 +9,7 @@ import java.util.UUID;
 @Data
 public class Stats {
 
-	private final UUID id;
-	private final String name;
+	private String lastSeenName;
 
 	private long online;
 

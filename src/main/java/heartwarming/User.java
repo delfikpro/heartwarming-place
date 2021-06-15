@@ -3,6 +3,8 @@ package heartwarming;
 import clepto.bukkit.B;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
+import dev.implario.kensuke.Session;
+import dev.implario.kensuke.impl.bukkit.IBukkitKensukeUser;
 import heartwarming.game.Game;
 import heartwarming.mod.Mod;
 import io.netty.buffer.ByteBuf;
@@ -14,18 +16,25 @@ import net.minecraft.server.v1_12_R1.MinecraftServer;
 import net.minecraft.server.v1_12_R1.PacketDataSerializer;
 import net.minecraft.server.v1_12_R1.PacketPlayOutCustomPayload;
 import org.bukkit.craftbukkit.v1_12_R1.entity.CraftPlayer;
-import ru.cristalix.core.stats.player.PlayerWrapper;
+import org.bukkit.entity.Player;
 
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 @Getter
-public class User extends PlayerWrapper {
+public class User implements IBukkitKensukeUser {
 
 	@Setter
 	private Game game;
 
 	private final long joinOnline;
+
+	@Getter
+	@Setter
+	private Player player;
+
+	@Getter
+	private final Session session;
 
 	@Setter
 	private int combo;
@@ -44,17 +53,12 @@ public class User extends PlayerWrapper {
 	@Delegate
 	private final Stats stats;
 
-	public User(UUID uuid, String name, Stats stats) {
-		super(uuid, name);
-		this.stats = stats == null ? new Stats(uuid, name) : stats;
+	public User(Session session, Stats stats) {
+		if (stats == null) stats = new Stats();
+		this.session = session;
+		this.stats = stats;
 
 		this.joinOnline = this.stats.getOnline();
-
-	}
-
-	public void save() {
-
-		stats.setOnline(getPlayedTime());
 
 	}
 

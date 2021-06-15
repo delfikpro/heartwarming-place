@@ -7,31 +7,25 @@ import clepto.bukkit.world.Label;
 import clepto.cristalix.Cristalix;
 import clepto.cristalix.WorldMeta;
 import com.destroystokyo.paper.event.player.PlayerInitialSpawnEvent;
-import dev.implario.bukkit.item.ItemBuilder;
+import dev.implario.kensuke.Kensuke;
+import dev.implario.kensuke.LeaderboardEntry;
+import dev.implario.kensuke.Scope;
+import dev.implario.kensuke.impl.bukkit.BukkitKensuke;
+import dev.implario.kensuke.impl.bukkit.BukkitUserManager;
 import heartwarming.game.Slot;
-import heartwarming.game.gameof2048.Direction;
 import heartwarming.mod.ModManager;
 import heartwarming.script.ScriptManager;
 import heartwarming.soulsong.SoulSong;
 import implario.humanize.TimeFormatter;
 import lombok.Getter;
 import lombok.SneakyThrows;
-import net.md_5.bungee.api.chat.TextComponent;
 import net.minecraft.server.v1_12_R1.BlockPosition;
-import net.minecraft.server.v1_12_R1.Items;
-import net.minecraft.server.v1_12_R1.NBTBase;
-import net.minecraft.server.v1_12_R1.NBTTagCompound;
 import org.bukkit.*;
 import org.bukkit.block.Block;
 import org.bukkit.craftbukkit.v1_12_R1.CraftWorld;
-import org.bukkit.craftbukkit.v1_12_R1.entity.CraftArmorStand;
-import org.bukkit.craftbukkit.v1_12_R1.inventory.CraftItemStack;
-import org.bukkit.craftbukkit.v1_12_R1.inventory.CraftMetaSkull;
 import org.bukkit.entity.ArmorStand;
-import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
-import org.bukkit.event.Event;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
@@ -39,54 +33,52 @@ import org.bukkit.event.block.*;
 import org.bukkit.event.entity.*;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.player.*;
-import org.bukkit.event.world.ChunkUnloadEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
-import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.projectiles.ProjectileSource;
 import org.spigotmc.event.player.PlayerSpawnLocationEvent;
 import ru.cristalix.boards.bukkitapi.Board;
 import ru.cristalix.boards.bukkitapi.Boards;
 import ru.cristalix.core.CoreApi;
-import ru.cristalix.core.account.IAccountService;
-import ru.cristalix.core.build.models.Point;
-import ru.cristalix.core.chat.ChatTextComponent;
-import ru.cristalix.core.chat.IChatView;
-import ru.cristalix.core.event.PermissionsLoadEvent;
 import ru.cristalix.core.map.*;
 import ru.cristalix.core.permissions.IGroup;
 import ru.cristalix.core.permissions.IPermissionContext;
 import ru.cristalix.core.permissions.IPermissionService;
-import ru.cristalix.core.permissions.StaffGroups;
 import ru.cristalix.core.realm.IRealmService;
 import ru.cristalix.core.realm.RealmId;
 import ru.cristalix.core.realm.RealmInfo;
 import ru.cristalix.core.realm.RealmStatus;
-import ru.cristalix.core.stats.IStatService;
-import ru.cristalix.core.stats.PlayerScope;
-import ru.cristalix.core.stats.UserManager;
-import ru.cristalix.core.stats.impl.StatService;
-import ru.cristalix.core.stats.impl.network.StatServiceConnectionData;
-import ru.cristalix.core.text.TextFormat;
-import ru.cristalix.core.util.UtilV3;
 
 import java.time.Duration;
 import java.util.*;
-import java.util.concurrent.CompletableFuture;
 
 import static implario.humanize.TimeFormatter.Interval.TICK;
-import static java.lang.Enum.valueOf;
 
 public class HeartwarmingPlugin extends JavaPlugin implements Listener {
 
     @Getter
     public static HeartwarmingPlugin instance;
-    public static final PlayerScope<Stats> statScope = new PlayerScope<>("heartwarming", Stats.class);
+
+
+    public static final Scope<Stats> statScope = new Scope<>("heartwarming", Stats.class);
+
+    static {
+        statScope.setDefaultDataSupplier(uuid -> new Stats());
+    }
 
     private Location spawn;
 
-    public static UserManager<User> userManager;
+    public static BukkitUserManager<User> userManager = new BukkitUserManager<>(
+            Collections.singletonList(statScope),
+            (session, context) -> new User(session, context.getData(statScope)),
+            (user, context) -> {
+                user.setOnline(user.getPlayedTime());
+                user.setLastSeenName(user.getPlayer().getName());
+                context.store(statScope, user.getStats());
+            }
+    );
+
     public static WorldMeta worldMeta;
 
     private final Map<Location, Slot> slots = new HashMap<>();
@@ -100,7 +92,6 @@ public class HeartwarmingPlugin extends JavaPlugin implements Listener {
 
         ScriptManager.init();
         RealmInfo info = IRealmService.get().getCurrentRealmInfo();
-//        info.setInitialPayload(new byte[] {62, 45, 10});
 //        System.out.println(new String(info.getInitialPayload()));
 //        info.setTrustMyHost(true);
 
@@ -110,22 +101,13 @@ public class HeartwarmingPlugin extends JavaPlugin implements Listener {
 
         CoreApi core = CoreApi.get();
         core.registerService(IMapService.class, new MapService());
-        IStatService statService = new StatService(core.getPlatformServer(), StatServiceConnectionData.fromEnvironment());
-        core.registerService(IStatService.class, statService);
 
-        statService.useScopes(statScope);
 
-        userManager = statService.registerUserManager(
-                context -> new User(context.getUuid(), context.getName(), context.getData(statScope)),
-                (user, context) -> {
-                    user.setOnline(user.getJoinOnline() + (System.currentTimeMillis() - user.getJoinTime()));
-                    context.store(statScope, user.getStats());
-                }
-
-        );
+        Kensuke kensuke = BukkitKensuke.setup(this);
+        kensuke.addGlobalUserManager(userManager);
+        kensuke.setGlobalRealm(info.getRealmId().getRealmName());
 
         TimeFormatter formatter = TimeFormatter.builder().accuracy(0).excludeIntervals(TICK).build();
-
 
         B.regCommand((sender, args) -> {
             User user = userManager.getUser(sender);
@@ -174,17 +156,21 @@ public class HeartwarmingPlugin extends JavaPlugin implements Listener {
 
         Doer doer = new BukkitDoer(this);
 
-        doer.every(10).seconds(() -> {
-            statService.getLeaderboard(statScope, "online", 10).thenAccept(r -> {
-                onlineTop.clearContent();
-                int i = 1;
-                for (Stats stats : r) {
-                    onlineTop.addContent(stats.getId(), "§d" + i++, stats.getName(),
-                            formatter.format(Duration.ofMillis(stats.getOnline())));
-                }
-                onlineTop.updateContent();
-            });
-        });
+//        doer.every(10).seconds(() -> {
+//
+//            kensuke.getLeaderboard(userManager, statScope, "online", 10).thenAccept(r -> {
+//                onlineTop.clearContent();
+//
+//                for (LeaderboardEntry<User> entry : r) {
+//                    User user = entry.getData();
+//                    onlineTop.addContent(UUID.fromString(user.getId()), "§d" + entry.getPosition(), user.getLastSeenName(),
+//                            formatter.format(Duration.ofMillis(user.getOnline())));
+//                }
+//
+//                onlineTop.updateContent();
+//            });
+//
+//        });
 
         for (Location slot : worldMeta.getLabels("slot")) {
             slot.getBlock().setType(Material.DIAMOND_BLOCK);

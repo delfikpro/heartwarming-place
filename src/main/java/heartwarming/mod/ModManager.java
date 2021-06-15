@@ -137,7 +137,7 @@ public class ModManager {
         Bukkit.getMessenger().registerIncomingPluginChannel(B.plugin, "sdkconfirm", (s, player, bytes) -> {
             User user = HeartwarmingPlugin.userManager.getUser(player);
 
-            System.out.println("Reload confirm for " + user.getName() + ", " + bytes.length);
+            System.out.println("Reload confirm for " + user.getLastSeenName() + ", " + bytes.length);
 
             ByteBuf byteBuf = Unpooled.wrappedBuffer(bytes);
             String modClass = NetUtil.readUtf8(byteBuf);
