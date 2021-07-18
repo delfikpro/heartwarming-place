@@ -42,6 +42,8 @@ import ru.cristalix.boards.bukkitapi.Board;
 import ru.cristalix.boards.bukkitapi.Boards;
 import ru.cristalix.core.CoreApi;
 import ru.cristalix.core.map.*;
+import ru.cristalix.core.network.ISocketClient;
+import ru.cristalix.core.network.packages.PluginMessagePackage;
 import ru.cristalix.core.permissions.IGroup;
 import ru.cristalix.core.permissions.IPermissionContext;
 import ru.cristalix.core.permissions.IPermissionService;
@@ -50,6 +52,7 @@ import ru.cristalix.core.realm.RealmId;
 import ru.cristalix.core.realm.RealmInfo;
 import ru.cristalix.core.realm.RealmStatus;
 
+import java.net.InetSocketAddress;
 import java.time.Duration;
 import java.util.*;
 
@@ -78,6 +81,10 @@ public class HeartwarmingPlugin extends JavaPlugin implements Listener {
                 context.store(statScope, user.getStats());
             }
     );
+
+    static {
+        userManager.setOptional(true);
+    }
 
     public static WorldMeta worldMeta;
 
@@ -141,6 +148,8 @@ public class HeartwarmingPlugin extends JavaPlugin implements Listener {
 
 //        this.spawn = new Location(worldMeta.getWorld(), 0, 0, 0);
 
+        Doer doer = new BukkitDoer(this);
+
         Board onlineTop = Boards.newBoard();
         Label topLabel = worldMeta.requireLabel("top");
         topLabel.setYaw(Float.parseFloat(topLabel.getTag()));
@@ -154,23 +163,23 @@ public class HeartwarmingPlugin extends JavaPlugin implements Listener {
 
         Boards.addBoard(onlineTop);
 
-        Doer doer = new BukkitDoer(this);
+        doer.every(10).seconds(() -> {
 
-//        doer.every(10).seconds(() -> {
-//
-//            kensuke.getLeaderboard(userManager, statScope, "online", 10).thenAccept(r -> {
-//                onlineTop.clearContent();
-//
-//                for (LeaderboardEntry<User> entry : r) {
-//                    User user = entry.getData();
-//                    onlineTop.addContent(UUID.fromString(user.getId()), "§d" + entry.getPosition(), user.getLastSeenName(),
-//                            formatter.format(Duration.ofMillis(user.getOnline())));
-//                }
-//
-//                onlineTop.updateContent();
-//            });
-//
-//        });
+            long startTime = System.currentTimeMillis();
+            kensuke.getLeaderboard(userManager, statScope, "online", 10).thenAccept(r -> {
+                onlineTop.clearContent();
+
+                for (LeaderboardEntry<User> entry : r) {
+                    User user = entry.getData();
+                    onlineTop.addContent(UUID.fromString(user.getSession().getUserId()), "§d" + entry.getPosition(), user.getLastSeenName(),
+                            formatter.format(Duration.ofMillis(user.getOnline())));
+                }
+
+                onlineTop.updateContent();
+            });
+
+        });
+
 
         for (Location slot : worldMeta.getLabels("slot")) {
             slot.getBlock().setType(Material.DIAMOND_BLOCK);
@@ -250,9 +259,13 @@ public class HeartwarmingPlugin extends JavaPlugin implements Listener {
 
         new ModManager().init();
 
+        LoadedMap<World> ww = Cristalix.loadMap("Murder", "hall");
+
         B.regCommand((sender, args) -> {
-            sender.setResourcePack(args[0], UUID.randomUUID().toString().substring(0, 16));
-            return "Resourcepack changed";
+            sender.teleport(ww.getWorld().getSpawnLocation());
+//            sender.setResourcePack(args[0], UUID.randomUUID().toString().substring(0, 16));
+//            return "Resourcepack changed";
+            return "welcome";
         }, "rp");
 
         arena = worldMeta.requireLabel("arena");
@@ -269,6 +282,7 @@ public class HeartwarmingPlugin extends JavaPlugin implements Listener {
         B.repeat(1, () -> {
             for (Player p : Bukkit.getOnlinePlayers()) {
                 User user = userManager.getUser(p);
+                if (user == null) continue;
                 if (p.getLocation().distanceSquared(arena) < 81) {
                     if (!user.isPvp()) {
                         p.setAllowFlight(false);
@@ -309,6 +323,15 @@ public class HeartwarmingPlugin extends JavaPlugin implements Listener {
     public void handle(PlayerDeathEvent e) {
         e.setKeepInventory(true);
         e.setDeathMessage("");
+    }
+
+    @EventHandler
+    public void onPreprocess(PlayerCommandPreprocessEvent e) {
+        if (e.getMessage().toLowerCase().equals("/stop") && e.getPlayer().isOp()) {
+            for (Player p : Bukkit.getOnlinePlayers()) {
+                p.sendMessage(e.getPlayer().getDisplayName() + "§e перезагружает сервер командой §f/stop§e.");
+            }
+        }
     }
 
     @EventHandler
@@ -562,8 +585,12 @@ public class HeartwarmingPlugin extends JavaPlugin implements Listener {
 
         player.sendMessage("§eДобро пожаловать на Уютное местечко.");
         player.sendMessage("§eЭто технический сервер, на котором разработчики тестируют разную магию.");
-        player.sendMessage("§eКарта, которую пострили игроки: https://implario.dev/hw.schematic");
+//        player.sendMessage("§eКарта, которую пострили игроки: https://implario.dev/hw.schematic");
 
+
+        User user = userManager.getUser(player);
+        user.setJoinCounter(user.getJoinCounter() + 1);
+        player.sendMessage("§7Номер сессии: " + user.getJoinCounter());
 
 //        inventory.setItem(3, new ItemBuilder().item(Material.CLAY_BALL).nbt("other", "arrow_down").build().asBukkitMirror());
 //        inventory.setItem(4, new ItemBuilder().item(Material.CLAY_BALL).nbt("other", "arrow_left").build().asBukkitMirror());

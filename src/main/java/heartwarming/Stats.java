@@ -12,6 +12,7 @@ public class Stats {
 	private String lastSeenName;
 
 	private long online;
+	private long joinCounter;
 
 	private GameOf2048Save gameOf2048;
 	private TetrisSave tetrisSave;
